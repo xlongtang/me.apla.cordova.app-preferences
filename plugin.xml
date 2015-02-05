@@ -8,8 +8,8 @@
     <description>Application preferences plugin</description>
     <license>Apache</license>
     <keywords>preferences, settings</keywords>
-    <repo>https://github.com/apla/me.apla.cordova.app-preferences</repo>
-    <issue>https://github.com/apla/me.apla.cordova.app-preferences/issues</issue>
+    <repo>https://github.com/xlongtang/me.apla.cordova.app-preferences</repo>
+    <issue>https://github.com/xlongtang/me.apla.cordova.app-preferences/issues</issue>
 
     <js-module src="www/apppreferences.js">
         <clobbers target="plugins.appPreferences" />
