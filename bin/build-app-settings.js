@@ -2,123 +2,39 @@
 
 'use strict';
 
+var cordovaLib = 'cordova';
+var configParserLib = 'ConfigParser';
+
+try {
+	var cordova_util = require (cordovaLib + '/src/util');
+} catch (e) {
+	cordovaLib = 'cordova/node_modules/cordova-lib';
+	configParserLib = 'configparser/ConfigParser';
+}
+
+try {
+	cordova_util = require (cordovaLib + '/src/cordova/util');
+
+	var projectRoot = cordova_util.isCordova(process.cwd());
+	var projectXml = cordova_util.projectConfig(projectRoot);
+	var configParser = cordova_util.config_parser || cordova_util.configparser;
+
+	if (!configParser) {
+		var configParser = require(cordovaLib + '/src/' + configParserLib);
+	}
+	var projectConfig = new configParser(projectXml);
+} catch (e) {
+	console.error ('cordova error', e);
+}
+
+// console.log (projectConfig.name(), projectConfig.packageName());
+
+var path    = require('path');
 var fs      = require('fs');
 var plist   = require('plist');
 var libxml  = require('libxmljs');
 
-function ucfirst(s) {
-    return s.charAt(0).toUpperCase() + s.substring(1);
-}
-
-function ConfigMap(config) {
-// iOS
-// https://developer.apple.com/library/ios/documentation/cocoa/Conceptual/UserDefaults/Preferences/Preferences.html
-/*
-
-mkdir Settings.bundle
-cd Settings.bundle
-touch Root.plist
-mkdir en.lproj
-cd en.lproj
-touch Root.strings
-
-Identifier
-
-PSGroupSpecifier
-Type
-Title
-FooterText
-
-PSToggleSwitchSpecifier
-Title
-Key
-DefaultValue
-
-PSSliderSpecifier
-Key
-DefaultValue
-MinimumValue
-MaximumValue
-
-PSTitleValueSpecifier
-Title
-Key
-DefaultValue
-
-PSTextFieldSpecifier
-Title
-Key
-DefaultValue
-IsSecure
-KeyboardType (Alphabet , NumbersAndPunctuation , NumberPad , URL , EmailAddress)
-AutocapitalizationType
-AutocorrectionType
-
-PSMultiValueSpecifier
-Title
-Key
-DefaultValue
-Values
-Titles
-
-PSRadioGroupSpecifier
-Title
-FooterText???
-Key
-DefaultValue
-Values
-Titles
-
-
-*/
-
-    if (config.type) {
-        
-        if (config.type == 'group') {
-            config.type = 'PSGroupSpecifier';
-        }
-        else {     
-            config.DefaultValue = config['default'];
-            delete config['default'];
-
-            config.Key = config.name;
-            delete config['name'];
-
-            switch (config.type) {
-
-                case 'textfield':
-                    config.type = 'PSTextFieldSpecifier';                
-                    break;
-
-                case 'switch':
-                    config.type = 'PSToggleSwitchSpecifier';
-                    break;
-
-                case 'combo':
-                    config.type = 'PSMultiValueSpecifier';
-
-                    config.titles = [];
-                    config.values = [];
-                    config.items.forEach(function(a) {
-                        config.values.push(a.id || a.value);
-                        config.titles.push(a.title || a.name);
-                    });
-                    delete config.items;
-                    break;
-            }
-        }
-    }
-
-	Object.keys(config).forEach(function(k) {
-		var uc = ucfirst(k);
-		config[uc] = config[k];
-		if (uc != k)
-			delete config[k];
-	})
-
-	return config;
-}
-
+var mp = require('./lib/mobile_preferences.js');
 
 
 fs.readFile('app-settings.json', function(err, data) {
@@ -126,25 +42,12 @@ fs.readFile('app-settings.json', function(err, data) {
 		throw err;
     }
     
-	var iosData = JSON.parse(data);
-	var aData = iosData;
+	var configJson = JSON.parse(data);
 
-
-	// build iOS settings bundle
-
-	var items = [];
-	while (iosData.length) {
-		var src = iosData.shift();
-		if (src.type == 'group') {
-			src.items.forEach(function(s) {
-				iosData.unshift(s);
-			});
-			delete src['items'];
-		}
-		items.push(ConfigMap(src));
-	}
-
-	var plistXml = plist.build({ PreferenceSpecifiers: items });
+    var iosItems = mp.iosBuildItems(configJson);
+    
+	var plistXml = plist.build({ PreferenceSpecifiers: iosItems });    
+    
 	fs.exists('platforms/ios', function(exists) {
 		if (!exists) {
 			console.error('platform ios not found');
@@ -179,66 +82,9 @@ fs.readFile('app-settings.json', function(err, data) {
 	});
 
 
-
-	// build Android settings XML
-
-	var doc = new libxml.Document();
-	var strings = [];
-	var n = doc
-		.node('PreferenceScreen')
-		.attr({'xmlns:android': 'http://schemas.android.com/apk/res/android'});
-
-
-	var addSettings = function(parent, config) {
-		if (config.type == 'group') {
-			var g = parent
-				.node('PreferenceCategory')
-				.attr({'android:title': config.name || config.title});
-
-			config.items.forEach(function(item) {
-				addSettings(g, item);
-			});
-            
-		} else {
-
-			var attr = {
-				'android:title': config.title,
-				'android:key': config.name,
-				'android:defaultValue': config['default']
-			}
-
-			switch (config.type) {
-				case 'combo':
-					// Generate resource file
-					var d = new libxml.Document();
-					var res = d.node('resources');
-					var titles = res.node('string-array').attr({name: config.name}),
-					    values = res.node('string-array').attr({name: config.name + 'Values'});
-
-					config.items.forEach(function(item) {
-						titles.node('item', item.name || item.title);
-						values.node('item', item.id || item.value);
-					});
-
-					strings.push({
-						name: config.name,
-						xml: d.toString()
-					});
-
-					attr['android:entries'] = '@array/' + config.name;
-					attr['android:entryValues'] = '@array/' + config.name + 'Values';
-
-					parent
-						.node('ListPreference')
-						.attr(attr)
-				break;
-			}
-		}
-	}
-	aData.forEach(function(item) {
-		addSettings(n, item);
-	});
-
+    var settingsDocuments = mp.androidBuildSettings(configJson);
+    var preferencesDocument = settingsDocuments.preferencesDocument;
+    var stringsArrays = settingsDocuments.stringsArrays;
 
 	fs.exists('platforms/android', function(exists) {
 		if (!exists) {
@@ -251,8 +97,8 @@ fs.readFile('app-settings.json', function(err, data) {
 				throw e;
             }
 
-			// Write settings plist
-			fs.writeFile('platforms/android/res/xml/preference.xml', doc.toString(), function(err) {
+			// Write preferences xml file
+			fs.writeFile('platforms/android/res/xml/apppreferences.xml', preferencesDocument.toString(), function(err) {
 				if (err) {
 					throw err;
                 }
@@ -263,15 +109,42 @@ fs.readFile('app-settings.json', function(err, data) {
 			fs.mkdir('platforms/android/res/values', function(e) {
 				if (e && e.code != 'EEXIST') {
 					throw e;
-                }
-				strings.forEach(function(file) {
-					fs.writeFile('platforms/android/res/values/' + file.name + '.xml', file.xml, function(err) {
-						if (err) {
-							throw err;
-                        }
-					});
+				}
+
+				// Generate resource file
+				var prefsStringsDoc = new libxml.Document();
+				var resources = prefsStringsDoc.node('resources');
+
+				stringsArrays.forEach(function(stringsArray) {
+					var titlesXml = resources.node('string-array').attr({name: "apppreferences_" + stringsArray.name}),
+						valuesXml = resources.node('string-array').attr({name: "apppreferences_" + stringsArray.name + 'Values'});
+
+					for (var i=0, l=stringsArray.titles.length; i<l; i++) {
+						titlesXml.node('item', stringsArray.titles[i]);
+						valuesXml.node('item', stringsArray.values[i]);
+					}
+
 				});
+
+				fs.writeFile('platforms/android/res/values/apppreferences.xml', prefsStringsDoc.toString(), function(err) {
+					if (err) {
+						throw err;
+					}
+				});
+
 			});
+			
+			// no error handling, sorry
+			var rs = fs.createReadStream (path.resolve (__dirname, '../src/android/AppPreferencesActivity.template'));
+			var androidPackagePath = "me.apla.cordova".replace (/\./g, '/');
+			var activityFileName= path.join ('platforms/android/src', androidPackagePath, 'AppPreferencesActivity.java')
+			var ws = fs.createWriteStream (activityFileName);
+			ws.write ("package me.apla.cordova;\n\n");
+			ws.write ('import ' + projectConfig.packageName() + ".R;\n\n");
+			rs.pipe (ws);
+
+			console.log ('you must insert following xml node into <application> section of your Manifest:');
+			console.log ('<activity android:name="me.apla.cordova.AppPreferencesActivity"></activity>');
 		});
 	});
 

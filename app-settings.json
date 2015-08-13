@@ -2,35 +2,27 @@
     {
         "type":"group",
         "title":"Common",
-        "items":[
-            {
-                "title":"Server",
-                "name":"server",
-                "type":"textfield",
-                "default":"http://www.apache.org"
-            },
-            {
-                "title":"Other",
-                "type":"switch",
-                "default":false,
-                "name":"demo_switch"
-            },
-            {
-                "type":"combo",
-                "items":[
-                    {
-                        "value":"ru",
-                        "title":"Русский"
-                    },
-                    {
-                        "value":"en",
-                        "title":"English"
-                    }
-                ],
-                "default":"ru",
-                "title":"Language",
-                "name":"language"
-            }
-        ]
+        "items":[{
+			"title":"Title",
+			"type":"textfield",
+			"key":"title"
+		}, {
+			"title":"Language",
+			"type":"radio",
+			"key":"lang",
+			"default": "en-us",
+			"items":[{
+				"value":"en-us",
+				"title":"English (US)"
+			}, {
+				"value":"en-gb",
+				"title":"English (UK)"
+			}]
+		}, {
+			"title":"Debug",
+			"type":"toggle",
+			"default":false,
+			"key":"debug"
+		}]
     }
 ]
