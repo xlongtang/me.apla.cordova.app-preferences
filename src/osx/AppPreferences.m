@@ -6,6 +6,7 @@
 //  Copyright 2011 Sugee. All rights reserved.
 //
 //  Modified by Ivan Baktsheev, 2012-2015
+//  Modified by Tobias Bocanegra, 2015
 //
 // THIS HAVEN'T BEEN TESTED WITH CHILD PANELS YET.
 
@@ -21,12 +22,7 @@
 - (void)defaultsChanged:(NSNotification *)notification {
 
 	NSString * jsCallBack = [NSString stringWithFormat:@"cordova.fireDocumentEvent('preferencesChanged');"];
-
-#ifdef __CORDOVA_4_0_0
-	[self.webViewEngine evaluateJavaScript:jsCallBack completionHandler:nil];
-#else
 	[self.webView stringByEvaluatingJavaScriptFromString:jsCallBack];
-#endif
 }
 
 
@@ -36,14 +32,14 @@
 
 	__block CDVPluginResult* result = nil;
 
-	NSNumber *option = [[command arguments] objectAtIndex:0];
+	NSNumber *option = command.arguments[0];
 	bool watchChanges = true;
 	if (option) {
 		watchChanges = [option boolValue];
 	}
 
 	if (watchChanges) {
-		[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(defaultsChanged:) name:NSUserDefaultsDidChangeNotification object:nil];
+		[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(defaultsChanged) name:NSUserDefaultsDidChangeNotification object:nil];
 	} else {
 		[[NSNotificationCenter defaultCenter] removeObserver:self];
 	}
@@ -60,7 +56,7 @@
 
 	__block CDVPluginResult* result = nil;
 
-	NSDictionary* options = [[command arguments] objectAtIndex:0];
+	NSDictionary* options = command.arguments[0];
 
 	if (!options) {
 		result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"no options given"];
@@ -68,9 +64,9 @@
 		return;
 	}
 
-	NSString *settingsDict = [options objectForKey:@"dict"];
-	NSString *settingsName = [options objectForKey:@"key"];
-	NSString *suiteName    = [options objectForKey:@"iosSuiteName"];
+	NSString *settingsDict = options[@"dict"];
+	NSString *settingsName = options[@"key"];
+	NSString *suiteName    = options[@"iosSuiteName"];
 
 	[self.commandDelegate runInBackground:^{
 
@@ -110,25 +106,20 @@
 				escaped = [escaped stringByReplacingOccurrencesOfString:@"\"" withString:@"\\\""];
 				returnVar = [NSString stringWithFormat:@"\"%@\"", escaped];
 			} else if ([settingsValue isKindOfClass:[NSNumber class]]) {
-				if ((NSNumber*)settingsValue == (void*)kCFBooleanFalse || (NSNumber*)settingsValue == (void*)kCFBooleanTrue) {
-					// const char * x = [(NSNumber*)settingsValue objCType];
-					// NSLog(@"boolean %@", [(NSNumber*)settingsValue boolValue] == NO ? @"false" : @"true");
-					returnVar = [NSString stringWithFormat:@"%@", [(NSNumber*)settingsValue boolValue] == YES ? @"true": @"false"];
+				if ([@YES isEqual:settingsValue]) {
+					returnVar = @"true";
+				} else if ([@NO isEqual:settingsValue]) {
+					returnVar = @"false";
 				} else {
 					// TODO: int, float
-					// NSLog(@"number");
 					returnVar = [NSString stringWithFormat:@"%@", (NSNumber*)settingsValue];
 				}
-
 			} else if ([settingsValue isKindOfClass:[NSData class]]) { // NSData
 				returnVar = [[NSString alloc] initWithData:(NSData*)settingsValue encoding:NSUTF8StringEncoding];
 			}
 		} else {
 			// TODO: also submit dict
 			returnVar = [self getSettingFromBundle:settingsName]; //Parsing Root.plist
-
-			// if (returnVar == nil)
-			// @throw [NSException exceptionWithName:nil reason:@"Key not found" userInfo:nil];;
 		}
 
 		result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsString:returnVar];
@@ -149,7 +140,7 @@
 
 	__block CDVPluginResult* result = nil;
 
-	NSDictionary* options = [[command arguments] objectAtIndex:0];
+	NSDictionary* options = command.arguments[0];
 
 	if (!options) {
 		result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"no options given"];
@@ -157,9 +148,9 @@
 		return;
 	}
 
-	NSString *settingsDict = [options objectForKey:@"dict"];
-	NSString *settingsName = [options objectForKey:@"key"];
-	NSString *suiteName    = [options objectForKey:@"iosSuiteName"];
+	NSString *settingsDict = options[@"dict"];
+	NSString *settingsName = options[@"key"];
+	NSString *suiteName    = options[@"iosSuiteName"];
 
 	//[self.commandDelegate runInBackground:^{
 
@@ -220,16 +211,8 @@
 - (void)show:(CDVInvokedUrlCommand*)command
 {
 	__block CDVPluginResult* result;
-
-	if(&UIApplicationOpenSettingsURLString != nil) {
-
-		[[UIApplication sharedApplication] openURL:[NSURL URLWithString:UIApplicationOpenSettingsURLString]];
-		result = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK];
-
-	} else {
-		result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"switching to preferences not supported"];
-	}
-
+    NSLog(@"OSX version of this plugin does not support show() yet.");
+    result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"switching to preferences not supported"];
 	[self.commandDelegate sendPluginResult:result callbackId:[command callbackId]];
 
 }
@@ -238,7 +221,7 @@
 {
 	__block CDVPluginResult* result;
 
-	NSDictionary* options = [[command arguments] objectAtIndex:0];
+	NSDictionary* options = command.arguments[0];
 
 	if (!options) {
 		result = [CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR messageAsString:@"no options given"];
@@ -246,11 +229,11 @@
 		return;
 	}
 
-	NSString *settingsDict  = [options objectForKey:@"dict"];
-	NSString *settingsName  = [options objectForKey:@"key"];
-	NSString *settingsValue = [options objectForKey:@"value"];
-	NSString *settingsType  = [options objectForKey:@"type"];
-	NSString *suiteName     = [options objectForKey:@"iosSuiteName"];
+	NSString *settingsDict  = options[@"dict"];
+	NSString *settingsName  = options[@"key"];
+	NSString *settingsValue = options[@"value"];
+	NSString *settingsType  = options[@"type"];
+	NSString *suiteName     = options[@"iosSuiteName"];
 
 	//	NSLog(@"%@ = %@ (%@)", settingsName, settingsValue, settingsType);
 
@@ -332,12 +315,12 @@
 	NSString *finalPath = [settingsBundlePath stringByAppendingPathComponent:@"Root.plist"];
 
 	NSDictionary *settingsDict = [NSDictionary dictionaryWithContentsOfFile:finalPath];
-	NSArray *prefSpecifierArray = [settingsDict objectForKey:@"PreferenceSpecifiers"];
+	NSArray *prefSpecifierArray = settingsDict[@"PreferenceSpecifiers"];
 	NSDictionary *prefItem;
 	for (prefItem in prefSpecifierArray)
 	{
-		if ([[prefItem objectForKey:@"Key"] isEqualToString:settingsName])
-			return [prefItem objectForKey:@"DefaultValue"];
+		if ([prefItem[@"Key"] isEqualToString:settingsName])
+			return prefItem[@"DefaultValue"];
 	}
 	return nil;
 

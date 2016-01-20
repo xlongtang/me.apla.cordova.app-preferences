@@ -1,4 +1,4 @@
-function testPlugin () {
+function testPlugin (cb) {
 var tests = {
 	"bool-test": true,
 	"false-test": false,
@@ -6,7 +6,8 @@ var tests = {
 	"int-test": 1,
 	"zero-test": 0,
 	"string-test": "xxx",
-	"empty-string-test": "xxx",
+	"empty-string-test": "",
+	"string-with-quotes-test": "xx\"xx",
 	"obj-test": {a: "b"},
 	"arr-test": ["a", "b"],
 	"empty-arr-test": []
@@ -135,8 +136,33 @@ for (var testK in tests) {
 }
 
 setTimeout (function () {
-	console.log (pass + ' tests passed');
-	if (fail && fail.length)
-		console.error ('tests failed:', fail);
+	var prompt = 'AppPreferences plugin tests';
+
+	if (fail && fail.length) {
+		console.error ('%s passed: %d, failed: %d', prompt, pass, fail);
+	} else {
+		console.log ('%s — all %d passed', prompt, pass);
+	}
+
+	cb && cb (pass, fail);
 }, 1000);
+}
+
+function testPluginAndCallback () {
+    var contentTag = '<content src="http://127.0.0.1:50000" />';
+	var url = contentTag.split ('"')[1];
+    // location.href = url;
+    var oReq = new XMLHttpRequest();
+    oReq.addEventListener("load", function () {});
+
+	testPlugin (function (pass, fail) {
+
+		if (fail.length) {
+			url += "/test/fail?" + fail.join (';');
+		} else {
+			url += "/test/success";
+		}
+        oReq.open("GET", url);
+        oReq.send();
+	});
 }
